@@ -3,7 +3,7 @@
 
 #include "thread_pool.h"
 
-ThreadPool::ThreadPool(): _running(true)
+ThreadPool::ThreadPool(): _running(true), _task_size(0u), _job_size(0u)
 {
     // Determine the amount of threads to create.
     size_t thread_count;
@@ -14,6 +14,7 @@ ThreadPool::ThreadPool(): _running(true)
     // Prevents re-allocation during our emplace_back.
     _threads.reserve(thread_count);
 
+    //Run threads using worker_main
     for(size_t i = 0; i < thread_count; ++i)
         _threads.emplace_back(&ThreadPool::worker_main, this);
 }
@@ -26,6 +27,9 @@ ThreadPool::~ThreadPool()
     //We're done
     _running = false;
 
+    //Wake up all workers so we can actually rejoin them
+    _cv_worker.notify_all();
+
     // Unlock our mutex and rejoin all workers.
     lock.unlock();
     for(auto& t : _threads)
@@ -34,8 +38,36 @@ ThreadPool::~ThreadPool()
 
 void ThreadPool::worker_main()
 {
+    std::unique_lock<std::mutex> lock(_mutex);
+
     while(_running){
-        //Here's where our worker code goes.
+        ///Wait until we are woken up by some external influence?
+        _cv_worker.wait(lock);
+
+        while(true){
+            if(_job_size == 0)
+                break; // If there's no jobs, exit this inner loop.
+
+            int task = _job_task.back(); // The task is the one which the job at the end of our queue belongs to.
+            Job job = _job_function.back(); // The job is the one at the end of queue
+
+            // Remove the job that we're going to do from the queue
+            _job_task.pop_back();
+            _job_function.pop_back();
+            _job_size--;
+
+            // Unlock the mutex.
+            lock.unlock();
+
+            // Do the job
+            job();
+
+            // Lock the mutex
+            lock.lock();
+            _task_pending_count[task]--; // Let master know that we've reduced the job count for this task by one
+            if(_task_pending_count[task] == 0)
+                _cv_master.notify_all(); // Let master know that this task is completely finished.
+        }
     }
 }
 
@@ -73,4 +105,14 @@ void ThreadPool::task_perform(int task, const Job& job){
     _job_task.push_back(task); //Record which task this job belongs to in our job_test vector.
     _job_function.push_back(job); //Record what function to run to complete this job.
     _task_pending_count[task]++; //Increment the record of how many jobs remain for this task
+}
+
+// For making the master wait until a task is completed.
+void ThreadPool::task_wait(int task){
+    std::unique_lock<std::mutex> lock(_mutex); //Lock variable for simpler mutex usage.
+
+    while(_task_pending_count[task] > 0)
+        _cv_master.wait(lock); //If we're not done, wait.
+
+    _free_tasks.push_back(task); // Put the completed task ID into the _free_tasks variable... I dont know why.
 }

@@ -32,4 +32,7 @@ private:
     size_t _job_size;
     std::vector<int> _job_task; // maps every job to the task it belongs to
     std::vector<Job> _job_function; // stores the functions linked to each job
+
+    std::condition_variable _cv_worker;
+    std::condition_variable _cv_master;
 };
