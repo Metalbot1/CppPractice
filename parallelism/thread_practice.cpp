@@ -1,6 +1,6 @@
 #include "thread_practice.h"
 
-int run_thread_practice(){
+int main(){
     //add_vector_test(true, 10000, 3);
 
     delay_thread_handler(10);

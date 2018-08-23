@@ -5,10 +5,10 @@
 #include <iostream>
 #include <vector>
 #include <random>
-#include "print_functions.h"
+#include "../util/utilities.h"
 #include <mutex>
 
-int run_thread_practice();
+int main();
 
 void hello_from_thread(int thread_id);
 void hello_from_thread_handler(unsigned int num_threads);
