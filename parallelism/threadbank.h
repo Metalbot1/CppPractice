@@ -42,13 +42,19 @@ public:
         add_task(std::make_shared<task<Args...> >(t));
     }
 
-    void run_tasks(){
+    template<class... Args>
+    void add_task(void (*f)(Args...), std::tuple<Args...> a){
+        add_task(task<Args...>(f, a));
+    }
+
+    void run_all_tasks(){
         for(const std::shared_ptr<task_type>& t : tasks){
             t->run();
         }
     }
 private:
     std::vector<std::shared_ptr<task_type> > tasks;
+    std::vector<bool> done;
 };
 
 class threadbank {
