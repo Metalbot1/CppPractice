@@ -13,6 +13,12 @@ file(GLOB THREAD_POOL
         parallelism/thread_pool.cpp
         parallelism/thread_pool.h)
 
+file(GLOB THREAD_BANK
+        parallelism/threadbank.cpp
+        parallelism/threadbank.h)
+
 add_executable(thread_practice ${THREAD} ${UTILITIES})
 
 add_executable(thread_pool ${THREAD_POOL} ${UTILITIES})
+
+add_executable(thread_bank ${THREAD_BANK} ${UTILITIES})
