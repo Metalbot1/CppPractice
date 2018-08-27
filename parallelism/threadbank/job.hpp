@@ -1,7 +1,7 @@
 #pragma once
 
 #include <queue>
-#include "../common.h"
+#include "../../common.h"
 
 ///task_type is a non-template class for creating the task vector in job
 class task_type{
@@ -70,9 +70,3 @@ public:
 private:
     std::list<std::shared_ptr<task_type> > tasks;
 };
-
-class threadbank {
-public:
-private:
-};//*/
-

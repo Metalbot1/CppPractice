@@ -14,8 +14,9 @@ file(GLOB THREAD_POOL
         parallelism/thread_pool.h)
 
 file(GLOB THREAD_BANK
-        parallelism/threadbank.cpp
-        parallelism/threadbank.h)
+        parallelism/threadbank/*.cpp
+        parallelism/threadbank/*.h
+        parallelism/threadbank/*.hpp)
 
 add_executable(thread_practice ${THREAD} ${UTILITIES})
 
