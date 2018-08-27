@@ -1,26 +1,50 @@
 #pragma once
 
-#include <queue>
-#include "../../common.h"
 #include "job.hpp"
+#include "../../util/utilities.h"
 
 class worker{
 public:
-    //TODO: Constructor to initialize a local thread and run worker_main on it.
+    //Constructor initializes and thread and starts it on the worker_main loop
     worker();
 
-    //TODO: Function to tell the worker to stop
-    void stop_running();
+    explicit worker(std::shared_ptr<job> J);
 
-    //TODO: Tell the worker to work on a specific job
-    void add_job(job J);
+    //Destructor waits until worker is done working and then rejoins
+    ~worker();
 
-    //TODO: Getter for the working boolean
-    bool is_working(){return working;};
+    //Checks wether the worker is currently working on a task or not.
+    bool is_working(){return !working.try_lock();}
+
+    //Gets the job
+    std::shared_ptr<job> get_current_job(){return current_job;}
+
+    void set_current_job(const std::shared_ptr<job>& new_job){
+        working.lock();
+        current_job = new_job;
+        working.unlock();
+        clock_t starttime = std::clock();
+        while ((std::clock() - starttime) / CLOCKS_PER_SEC < 0.001);
+    }
+
+    void rejoin();
 
 private:
-    bool working, run;
+    //working boolean is
+    bool run;
 
-    //TODO: Implement main function for the worker.
+    //Tells the worker to stop running.
+    void stop(){run = false;}
+
+    std::mutex working;
+
+    //The thread that this worker runs on
+    std::thread worker_thread;
+
+    //Current job
+    std::shared_ptr<job> current_job;
+
+    //Main worker loop, tries to complete current job
     void worker_main();
 };
+

@@ -34,9 +34,19 @@ private:
 ///Contains and controls a vector of tasks
 class job{
 public:
+    job() = default;
+
+    job(const job& J): tasks(J.tasks){
+
+    };
+
+    ~job() = default;
+
     template<class... Args>
     void add_task(std::shared_ptr<task<Args...> > t){
+        tasks_mutex.lock();
         tasks.push_back(t);
+        tasks_mutex.unlock();
     }
 
     template<class... Args>
@@ -56,8 +66,15 @@ public:
 
     void run_next_task() {
         if (!is_done()) {
+            //Lock the tasks mutex, to ensure that noone else modifies the tasks list at the same time
+            tasks_mutex.lock();
+
+            //Store next task in queue and pop it.
             std::shared_ptr<task_type> task_holder = tasks.front();
             tasks.pop_front();
+
+            //Unlock the task mutex and then run the task.
+            tasks_mutex.unlock();
             task_holder->run();
         }else{
             std::cout << "Cannot run next task, no tasks left in job queue" << std::endl;
@@ -65,8 +82,15 @@ public:
     }
 
     bool is_done(){
-        return tasks.empty();
+        //std::cout << tasks.empty();
+        tasks_mutex.lock();
+        bool done = tasks.empty();
+        tasks_mutex.unlock();
+        //std::cout << done << std::endl;
+        return done;
     }
+
+    std::mutex tasks_mutex;
 private:
     std::list<std::shared_ptr<task_type> > tasks;
 };
