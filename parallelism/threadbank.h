@@ -3,6 +3,7 @@
 #include <queue>
 #include "../common.h"
 
+///task_type is a non-template class for creating the task vector in job
 class task_type{
 public:
     //Empty class for pointer purposes
@@ -30,6 +31,7 @@ private:
     std::tuple<Args...> args;
 };
 
+///Contains and controls a vector of tasks
 class job{
 public:
     template<class... Args>
@@ -48,19 +50,29 @@ public:
     }
 
     void run_all_tasks(){
-        for(const std::shared_ptr<task_type>& t : tasks){
-            t->run();
+        while(!is_done())
+            run_next_task();
+    }
+
+    void run_next_task() {
+        if (!is_done()) {
+            std::shared_ptr<task_type> task_holder = tasks.front();
+            tasks.pop_front();
+            task_holder->run();
+        }else{
+            std::cout << "Cannot run next task, no tasks left in job queue" << std::endl;
         }
     }
+
+    bool is_done(){
+        return tasks.empty();
+    }
 private:
-    std::vector<std::shared_ptr<task_type> > tasks;
-    std::vector<bool> done;
+    std::list<std::shared_ptr<task_type> > tasks;
 };
 
 class threadbank {
 public:
-
 private:
-
 };//*/
 
