@@ -20,67 +20,141 @@ void wait(double sec){
 
 int main(){
 
-    job test_job;
+    threadbank testbank(4);
+    std::cout << "Testbank initialized" << std::endl;
 
-    std::cout << "Job initialized" << std::endl;
+    job testjob;
+    testjob.add_task(wait, std::make_tuple(10.0));
+    testjob.add_task(wait, std::make_tuple(0.2));
+    testjob.add_task(wait, std::make_tuple(0.6));
+    testjob.add_task(wait, std::make_tuple(1.4));
+    testjob.add_task(wait, std::make_tuple(6.0));
+    testjob.add_task(wait, std::make_tuple(0.2));
+    testjob.add_task(wait, std::make_tuple(0.6));
+    testjob.add_task(wait, std::make_tuple(1.4));
+    testjob.add_task(wait, std::make_tuple(6.0));
+    std::cout << "Testjob built" << std::endl;
 
-    int counter = 476;
+    testbank.add_job(std::make_shared<job>(testjob));
+    std::cout << "Testjob added to queue" << std::endl;
 
-    test_job.add_task(wait, std::make_tuple(10.0));
-    test_job.add_task(wait, std::make_tuple(1.2));
-    test_job.add_task(wait, std::make_tuple(0.5));
-    test_job.add_task(wait, std::make_tuple(1.0));
-
-    std::cout << "Job filled" << std::endl;
-
-    ///Need to make external shared ptr to the job we want to execute, so the job isnt copied for each worker
-    std::shared_ptr<job> test_job_ptr = std::make_shared<job>(test_job);
-
-    worker test_worker_1, test_worker_2, test_worker_3, test_worker_4;
-
-    test_worker_1.set_current_job(test_job_ptr);
-    test_worker_2.set_current_job(test_job_ptr);
-    test_worker_3.set_current_job(test_job_ptr);
-    test_worker_4.set_current_job(test_job_ptr);
-
-    test_worker_1.start_working();
-    test_worker_2.start_working();
-    test_worker_3.start_working();
-    test_worker_4.start_working();
-
-    while(!test_job_ptr->is_done());
-
-    std::shared_ptr<job> test_job_ptr_2 = std::make_shared<job>(test_job);
-
-    test_worker_1.set_current_job(test_job_ptr_2);
-    test_worker_2.set_current_job(test_job_ptr_2);
-    test_worker_3.set_current_job(test_job_ptr_2);
-    test_worker_4.set_current_job(test_job_ptr_2);
-
-    test_worker_2.rejoin();
-    test_worker_1.rejoin();
-    test_worker_3.rejoin();
-    test_worker_4.rejoin();
+    testbank.soft_rejoin();
+    std::cout << "Testbank rejoined." << std::endl;
 
     return 0;
 }
 
 threadbank::threadbank(int num_workers){
-    ///Create empty job so we can initlialize the worker pool
-    job empty_job;
-    job_queue.emplace_back(std::make_shared<job>(empty_job));
-
     ///Initialize desired # of workers
     for(int wi = 0; wi < num_workers; wi++)
-        worker_pool.emplace_back(job_queue[0]);
+        worker_pool.emplace_back();
 
-    std::thread(threadbank_main);
+    manager = std::make_shared<std::thread>(std::thread(&threadbank::threadbank_main, this));
+}
+
+void threadbank::rejoin(){
+    //Tell the manager to stop running
+    bool run = false;
+
+    //Wait until the manager rejoins all the workers
+    while(!worker_pool.empty());
+
+    //lock all mutexes.
+    queue_mutex.lock();
+
+    //Rejoin manager
+    manager->join();
+}
+
+void threadbank::soft_rejoin(){
+    std::cout << "Attempting soft rejoin." << std::endl;
+    std::unique_lock<std::mutex> m_lk(master_mutex);
+
+    //Wait until all jobs are finished
+    if(!job_queue.empty()) {
+        std::cout << "Job queue is not empty" << std::endl;
+
+        //wait until the job queue is empty
+        master_cv.wait(m_lk);
+        m_lk.unlock();
+    }
+
+    std::cout << "Setting run to false and notifying manager" << std::endl;
+
+    //Manager has notified master thread -> job queue is empty.
+    run = false;
+    queue_cv.notify_one();
+
+    //Wait until the manager rejoins all the workers
+    master_cv.wait(m_lk);
+
+    std::cout << "Manager says that all workers are rejoined. Joining manager" << std::endl;
+
+    //Rejoin manager
+    manager->join();
 }
 
 void threadbank::threadbank_main(){
+    std::cout << "Manager started." << std::endl;
+    std::unique_lock<std::mutex> q_lk(queue_mutex);
 
+    //wait until we've been given a job.
+    queue_cv.wait(q_lk);
+    q_lk.unlock();
+
+    std::cout << "Manager noticed that the job queue has been updated." << std::endl;
+
+    //set the workers to the given job.
+    for(auto& w : worker_pool)
+        w.set_current_job(job_queue.front());
+
+    //Start all the workers
+    for(auto& w : worker_pool)
+        w.start_working();
+
+    ///Manager loop
+    while(run){
+        q_lk.lock();
+        if(job_queue.front()->is_done()) {
+            job_queue.pop_front();
+        }
+        q_lk.unlock();
+
+        //If the queue is empty, wait until we have another job.
+        if(job_queue.empty()){
+            std::cout << "Job queue is empty. Notifying master and then waiting for resume signal." << std::endl;
+            master_cv.notify_one();
+            queue_cv.wait(q_lk);
+            std::cout << "Manager notified to continue" << std::endl;
+        }else {
+            //If it's not, make sure all the workers are working on the right job.
+            for (auto &w : worker_pool) {
+                //If this worker isnt working on it's intended job, set it to the correct job.
+                if (w.get_current_job() != job_queue.front()) {
+                    std::cout << "Fixing worker job." << std::endl;
+                    w.set_current_job(job_queue.front());
+                }
+            }
+        }
+    }
+
+    std::cout << "Manager out of main loop, attempting to rejoin all workers." << std::endl;
+
+    ///Finished manager loop, so we want to rejoin all the workers.
+    while(!worker_pool.empty()){
+        worker_pool.back().rejoin();
+        worker_pool.pop_back();
+    }
+
+    master_cv.notify_one();
 }
 
+void threadbank::add_job(std::shared_ptr<job> J){
+    queue_mutex.lock();
+    job_queue.push_back(J);
+    queue_mutex.unlock();
 
+    queue_cv.notify_one();
+};
 
 

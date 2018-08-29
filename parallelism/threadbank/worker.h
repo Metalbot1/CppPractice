@@ -25,8 +25,6 @@ public:
         working.lock();
         current_job = new_job;
         working.unlock();
-        clock_t starttime = std::clock();
-        while ((std::clock() - starttime) / CLOCKS_PER_SEC < 0.00000001);
     }
 
     const void rejoin();
