@@ -16,29 +16,33 @@ public:
     worker(const worker&);
 
     //Checks wether the worker is currently working on a task or not.
-    bool is_working(){return !working.try_lock();}
+    bool is_running(){return run;}
 
     //Gets the job
     std::shared_ptr<job> get_current_job(){return current_job;}
 
     void set_current_job(const std::shared_ptr<job>& new_job){
-        working.lock();
+        work_mutex.lock();
         current_job = new_job;
-        working.unlock();
+        work_mutex.unlock();
+
+        work_cv.notify_one();
     }
 
     const void rejoin();
 
     const void start_working();
 
+    bool is_waiting(){
+        return waiting;
+    }
+
 private:
     //working boolean is
-    bool run;
+    bool run, waiting;
 
-    //Tells the worker to stop running.
-    void stop(){run = false;}
-
-    std::mutex working;
+    std::mutex work_mutex;
+    std::condition_variable work_cv;
 
     //The thread that this worker runs on
     std::shared_ptr<std::thread> worker_thread = nullptr;

@@ -10,9 +10,7 @@ public:
 
     void add_job(std::shared_ptr<job> J);
 
-    void rejoin();
-
-    void soft_rejoin();
+    void rejoin(bool hard);
 
 private:
     void threadbank_main();

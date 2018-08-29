@@ -36,9 +36,12 @@ int main(){
     std::cout << "Testjob built" << std::endl;
 
     testbank.add_job(std::make_shared<job>(testjob));
-    std::cout << "Testjob added to queue" << std::endl;
+    testbank.add_job(std::make_shared<job>(testjob));
+    //testbank.add_job(std::make_shared<job>(testjob));
+    //testbank.add_job(std::make_shared<job>(testjob));
+    //testbank.add_job(std::make_shared<job>(testjob));
 
-    testbank.soft_rejoin();
+    testbank.rejoin(false);
     std::cout << "Testbank rejoined." << std::endl;
 
     return 0;
@@ -49,30 +52,27 @@ threadbank::threadbank(int num_workers){
     for(int wi = 0; wi < num_workers; wi++)
         worker_pool.emplace_back();
 
+
+    std::unique_lock<std::mutex> m_lk(master_mutex);
     manager = std::make_shared<std::thread>(std::thread(&threadbank::threadbank_main, this));
+    master_cv.wait(m_lk);
 }
 
-void threadbank::rejoin(){
-    //Tell the manager to stop running
-    bool run = false;
-
-    //Wait until the manager rejoins all the workers
-    while(!worker_pool.empty());
-
-    //lock all mutexes.
-    queue_mutex.lock();
-
-    //Rejoin manager
-    manager->join();
-}
-
-void threadbank::soft_rejoin(){
-    std::cout << "Attempting soft rejoin." << std::endl;
+void threadbank::rejoin(bool hard){
+    std::cout << "Attempting rejoin." << std::endl;
     std::unique_lock<std::mutex> m_lk(master_mutex);
 
     //Wait until all jobs are finished
     if(!job_queue.empty()) {
         std::cout << "Job queue is not empty" << std::endl;
+
+        if(hard && (job_queue.size() > 1)){
+            std::cout << "Attempting hard rejoin - removing all untouched jobs." << std::endl;
+            queue_mutex.lock();
+            while(job_queue.size() > 1)
+                job_queue.pop_back();
+            queue_mutex.unlock();
+        }
 
         //wait until the job queue is empty
         master_cv.wait(m_lk);
@@ -97,6 +97,9 @@ void threadbank::soft_rejoin(){
 void threadbank::threadbank_main(){
     std::cout << "Manager started." << std::endl;
     std::unique_lock<std::mutex> q_lk(queue_mutex);
+
+    //Let master know that we're ready to continue
+    master_cv.notify_one();
 
     //wait until we've been given a job.
     queue_cv.wait(q_lk);
@@ -127,7 +130,8 @@ void threadbank::threadbank_main(){
             queue_cv.wait(q_lk);
             std::cout << "Manager notified to continue" << std::endl;
         }else {
-            //If it's not, make sure all the workers are working on the right job.
+            //If it's not, make sure all the workers are working on the right job
+            //And that none of them are waiting for no reason.
             for (auto &w : worker_pool) {
                 //If this worker isnt working on it's intended job, set it to the correct job.
                 if (w.get_current_job() != job_queue.front()) {
@@ -141,9 +145,14 @@ void threadbank::threadbank_main(){
     std::cout << "Manager out of main loop, attempting to rejoin all workers." << std::endl;
 
     ///Finished manager loop, so we want to rejoin all the workers.
-    while(!worker_pool.empty()){
-        worker_pool.back().rejoin();
-        worker_pool.pop_back();
+    while(!worker_pool.empty()) {
+        for (auto &w : worker_pool) {
+            if (w.is_waiting()) {
+                w.rejoin();
+            }
+        }
+        if (!worker_pool.back().is_running())
+            worker_pool.pop_back();
     }
 
     master_cv.notify_one();
