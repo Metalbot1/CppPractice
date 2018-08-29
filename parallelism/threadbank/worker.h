@@ -13,6 +13,8 @@ public:
     //Destructor waits until worker is done working and then rejoins
     ~worker();
 
+    worker(const worker&);
+
     //Checks wether the worker is currently working on a task or not.
     bool is_working(){return !working.try_lock();}
 
@@ -24,10 +26,12 @@ public:
         current_job = new_job;
         working.unlock();
         clock_t starttime = std::clock();
-        while ((std::clock() - starttime) / CLOCKS_PER_SEC < 0.001);
+        while ((std::clock() - starttime) / CLOCKS_PER_SEC < 0.00000001);
     }
 
-    void rejoin();
+    const void rejoin();
+
+    const void start_working();
 
 private:
     //working boolean is
@@ -39,7 +43,7 @@ private:
     std::mutex working;
 
     //The thread that this worker runs on
-    std::thread worker_thread;
+    std::shared_ptr<std::thread> worker_thread = nullptr;
 
     //Current job
     std::shared_ptr<job> current_job;

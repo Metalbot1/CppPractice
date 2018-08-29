@@ -1,25 +1,25 @@
 #include "worker.h"
 
 worker::worker(){
-    //Set run to false because we want to allow external setup before starting the worker loop
-    run = true;
-
-    //Initialize the worker thread and have it begin running worker_main
-    worker_thread = std::thread{&worker::worker_main, this};
-}
+    worker_thread = nullptr;
+    run = false;
+};
 
 worker::worker(std::shared_ptr<job> J){
     current_job = J;
 
-    //Set run to false because we want to allow external setup before starting the worker loop
-    run = true;
+    //Set worker_thread to nullptr.
+    worker_thread = nullptr;
+    run = false;
+}
 
-    //Initialize the worker thread and have it begin running worker_main
-    worker_thread = std::thread{&worker::worker_main, this};
+worker::worker(const worker& W){
+    //Copy worker's job pointer
+    current_job = W.current_job;
 
-    //Give the worker some time to gain control of the mutex.
-    clock_t starttime = std::clock();
-    while ((std::clock() - starttime) / CLOCKS_PER_SEC < 0.001);
+    //Copy worker's thread pointer
+    worker_thread = W.worker_thread;
+    run = W.run;
 }
 
 worker::~worker(){
@@ -29,15 +29,13 @@ worker::~worker(){
     }
 }
 
-void worker::rejoin(){
+const void worker::rejoin(){
     //Tell the worker main loop to stop
     stop();
 
     working.lock(); //Wait until the worker is done working
 
-    worker_thread.join(); //Rejoin the worker thread
-
-    std::cout << "Worker rejoined." << std::endl;
+    worker_thread->join(); //Rejoin the worker thread
 }
 
 //Main worker function, runs loop and tries to finish tasks for the current job.
@@ -51,5 +49,16 @@ void worker::worker_main(){
                 current_job->run_next_task();
             working.unlock();
         }
+    }
+}
+
+const void worker::start_working(){
+    if(!run) {
+        run = true;
+
+        //Initialize the worker thread and have it begin running worker_main
+        worker_thread = std::make_shared<std::thread>(std::thread{&worker::worker_main, this});
+    }else{
+        std::cout << "Cannot start working, worker is already running" << std::endl;
     }
 }

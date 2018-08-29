@@ -36,10 +36,17 @@ int main(){
     ///Need to make external shared ptr to the job we want to execute, so the job isnt copied for each worker
     std::shared_ptr<job> test_job_ptr = std::make_shared<job>(test_job);
 
-    worker test_worker_1(test_job_ptr);
-    worker test_worker_2(test_job_ptr);
-    worker test_worker_3(test_job_ptr);
-    worker test_worker_4(test_job_ptr);
+    worker test_worker_1, test_worker_2, test_worker_3, test_worker_4;
+
+    test_worker_1.set_current_job(test_job_ptr);
+    test_worker_2.set_current_job(test_job_ptr);
+    test_worker_3.set_current_job(test_job_ptr);
+    test_worker_4.set_current_job(test_job_ptr);
+
+    test_worker_1.start_working();
+    test_worker_2.start_working();
+    test_worker_3.start_working();
+    test_worker_4.start_working();
 
     while(!test_job_ptr->is_done());
 
@@ -56,6 +63,22 @@ int main(){
     test_worker_4.rejoin();
 
     return 0;
+}
+
+threadbank::threadbank(int num_workers){
+    ///Create empty job so we can initlialize the worker pool
+    job empty_job;
+    job_queue.emplace_back(std::make_shared<job>(empty_job));
+
+    ///Initialize desired # of workers
+    for(int wi = 0; wi < num_workers; wi++)
+        worker_pool.emplace_back(job_queue[0]);
+
+    std::thread(threadbank_main);
+}
+
+void threadbank::threadbank_main(){
+
 }
 
 
