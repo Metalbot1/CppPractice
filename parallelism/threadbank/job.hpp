@@ -36,9 +36,7 @@ class job{
 public:
     job() = default;
 
-    job(const job& J): tasks(J.tasks){
-
-    };
+    job(const job& J): tasks(J.tasks){};
 
     ~job() = default;
 
@@ -57,6 +55,11 @@ public:
     template<class... Args>
     void add_task(void (*f)(Args...), std::tuple<Args...> a){
         add_task(task<Args...>(f, a));
+    }
+
+    template<class... Args>
+    void add_task(void (*f)(Args...), Args... a){
+        add_task(f, std::tuple<Args...>(a...));
     }
 
     void run_all_tasks(){

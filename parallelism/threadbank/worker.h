@@ -5,52 +5,51 @@
 
 class worker{
 public:
-    //Constructor initializes and thread and starts it on the worker_main loop
+    //Default constructor sets run flag to false and worker_thread NULL
     worker();
 
+    //Construction with a job pointer makes the worker begin work immediately
     explicit worker(std::shared_ptr<job> J);
 
-    //Destructor waits until worker is done working and then rejoins
+    //Destructor rejoins the worker thread if it hasnt been already.
     ~worker();
 
+    //Copy constructor just copies pointers. DOES NOT CREATE A NEW WORKER THREAD!
     worker(const worker&);
 
-    //Checks wether the worker is currently working on a task or not.
+    //Returns the run flag
     bool is_running(){return run;}
 
-    //Gets the job
+    //Returns the job pointer
     std::shared_ptr<job> get_current_job(){return current_job;}
 
-    void set_current_job(const std::shared_ptr<job>& new_job){
-        work_mutex.lock();
-        current_job = new_job;
-        work_mutex.unlock();
+    //Sets the job pointer, and notifies the worker thread to continue working
+    void set_current_job(const std::shared_ptr<job>& new_job);
 
-        work_cv.notify_one();
-    }
-
+    //Rejoins the worker thread, if it hasnt been already
     const void rejoin();
 
+    //Starts the worker, if it's not already running.
     const void start_working();
 
-    bool is_waiting(){
-        return waiting;
-    }
+    //Returns wether or not the worker is currently waiting for intervention from a manager
+    bool is_waiting(){return waiting;}
 
 private:
-    //working boolean is
+    //Flags for the worker to communicate with the manager.
     bool run, waiting;
 
+    //Synchronization variables for communication between worker and manager.
     std::mutex work_mutex;
     std::condition_variable work_cv;
 
-    //The thread that this worker runs on
+    //Pointer to the worker thread.
     std::shared_ptr<std::thread> worker_thread = nullptr;
 
-    //Current job
+    //Pointer to the current job.
     std::shared_ptr<job> current_job;
 
-    //Main worker loop, tries to complete current job
+    //Loop that the worker thread runs.
     void worker_main();
 };
 

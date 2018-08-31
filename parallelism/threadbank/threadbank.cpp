@@ -24,7 +24,7 @@ int main(){
     std::cout << "Testbank initialized" << std::endl;
 
     job testjob;
-    testjob.add_task(wait, std::make_tuple(10.0));
+    testjob.add_task(wait, 10.0);
     testjob.add_task(wait, std::make_tuple(0.2));
     testjob.add_task(wait, std::make_tuple(0.6));
     testjob.add_task(wait, std::make_tuple(1.4));
